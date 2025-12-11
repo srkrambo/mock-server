@@ -17,6 +17,7 @@ return [
         'sessions' => __DIR__ . '/storage/sessions',
         'rate_limits' => __DIR__ . '/storage/rate_limits',
         'api_keys' => __DIR__ . '/storage/api_keys',
+        'cleanup_hours' => 5, // Hours after which old POST entries and uploaded files are cleaned up
     ],
     
     // Server settings

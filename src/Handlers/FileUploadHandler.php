@@ -20,12 +20,20 @@ class FileUploadHandler
     /**
      * Handle direct raw/binary upload
      */
-    public function handleRawUpload($filename = null)
+    public function handleRawUpload($filename = null, $maxSize = null)
     {
         $input = file_get_contents('php://input');
         
         if (empty($input)) {
             return ['success' => false, 'error' => 'No data received'];
+        }
+        
+        // Check size limit
+        if ($maxSize !== null && strlen($input) > $maxSize) {
+            return [
+                'success' => false,
+                'error' => sprintf('Upload size (%d bytes) exceeds maximum allowed size of %d bytes', strlen($input), $maxSize),
+            ];
         }
         
         if (!$filename) {
@@ -50,7 +58,7 @@ class FileUploadHandler
     /**
      * Handle multipart form-data upload
      */
-    public function handleMultipartUpload()
+    public function handleMultipartUpload($maxSize = null)
     {
         if (empty($_FILES)) {
             return ['success' => false, 'error' => 'No files uploaded'];
@@ -63,6 +71,15 @@ class FileUploadHandler
                 // Multiple files
                 for ($i = 0; $i < count($file['name']); $i++) {
                     if ($file['error'][$i] === UPLOAD_ERR_OK) {
+                        // Check size limit
+                        if ($maxSize !== null && $file['size'][$i] > $maxSize) {
+                            return [
+                                'success' => false,
+                                'error' => sprintf('File %s size (%d bytes) exceeds maximum allowed size of %d bytes', 
+                                    $file['name'][$i], $file['size'][$i], $maxSize),
+                            ];
+                        }
+                        
                         $result = $this->saveUploadedFile(
                             $file['tmp_name'][$i],
                             $file['name'][$i],
@@ -77,6 +94,15 @@ class FileUploadHandler
             } else {
                 // Single file
                 if ($file['error'] === UPLOAD_ERR_OK) {
+                    // Check size limit
+                    if ($maxSize !== null && $file['size'] > $maxSize) {
+                        return [
+                            'success' => false,
+                            'error' => sprintf('File %s size (%d bytes) exceeds maximum allowed size of %d bytes', 
+                                $file['name'], $file['size'], $maxSize),
+                        ];
+                    }
+                    
                     $result = $this->saveUploadedFile(
                         $file['tmp_name'],
                         $file['name'],
@@ -104,7 +130,7 @@ class FileUploadHandler
     /**
      * Handle Base64 encoded upload from JSON
      */
-    public function handleBase64Upload($data)
+    public function handleBase64Upload($data, $maxSize = null)
     {
         if (!isset($data['filename']) || !isset($data['content'])) {
             return ['success' => false, 'error' => 'Missing filename or content'];
@@ -125,6 +151,15 @@ class FileUploadHandler
             return ['success' => false, 'error' => 'Invalid base64 content'];
         }
         
+        // Check size limit
+        if ($maxSize !== null && strlen($decodedContent) > $maxSize) {
+            return [
+                'success' => false,
+                'error' => sprintf('File size (%d bytes) exceeds maximum allowed size of %d bytes', 
+                    strlen($decodedContent), $maxSize),
+            ];
+        }
+        
         $filepath = $this->uploadDir . '/' . $filename;
         
         if (file_put_contents($filepath, $decodedContent) !== false) {
@@ -143,7 +178,7 @@ class FileUploadHandler
     /**
      * Handle TUS resumable upload
      */
-    public function handleTusUpload($method, $headers)
+    public function handleTusUpload($method, $headers, $maxSize = null)
     {
         $tusResumable = $headers['Tus-Resumable'] ?? null;
         
@@ -158,25 +193,34 @@ class FileUploadHandler
         
         switch ($method) {
             case 'POST':
-                return $this->tusCreate($headers);
+                return $this->tusCreate($headers, $maxSize);
             case 'PATCH':
-                return $this->tusPatch($headers);
+                return $this->tusPatch($headers, $maxSize);
             case 'HEAD':
                 return $this->tusHead($headers);
             case 'OPTIONS':
-                return $this->tusOptions();
+                return $this->tusOptions($maxSize);
             default:
                 return ['success' => false, 'error' => 'Unsupported TUS method'];
         }
     }
     
-    private function tusCreate($headers)
+    private function tusCreate($headers, $maxSize = null)
     {
         $uploadLength = $headers['Upload-Length'] ?? null;
         $uploadMetadata = $headers['Upload-Metadata'] ?? '';
         
         if (!$uploadLength) {
             return ['success' => false, 'error' => 'Upload-Length header required'];
+        }
+        
+        // Check size limit
+        if ($maxSize !== null && (int)$uploadLength > $maxSize) {
+            return [
+                'success' => false,
+                'error' => sprintf('Upload length (%d bytes) exceeds maximum allowed size of %d bytes', 
+                    (int)$uploadLength, $maxSize),
+            ];
         }
         
         // Generate unique ID for this upload
@@ -193,6 +237,7 @@ class FileUploadHandler
             'offset' => 0,
             'metadata' => $uploadMetadata,
             'created' => time(),
+            'max_size' => $maxSize,
         ];
         
         file_put_contents($filepath . '.meta', json_encode($metadata));
@@ -208,7 +253,7 @@ class FileUploadHandler
         ];
     }
     
-    private function tusPatch($headers)
+    private function tusPatch($headers, $maxSize = null)
     {
         $uploadOffset = $headers['Upload-Offset'] ?? null;
         $contentType = $headers['Content-Type'] ?? '';
@@ -241,6 +286,16 @@ class FileUploadHandler
         
         // Append data
         $input = file_get_contents('php://input');
+        
+        // Check if appending this chunk would exceed max size
+        $maxSizeToCheck = $metadata['max_size'] ?? $maxSize;
+        if ($maxSizeToCheck !== null && ($metadata['offset'] + strlen($input)) > $maxSizeToCheck) {
+            return [
+                'success' => false,
+                'error' => sprintf('Upload would exceed maximum allowed size of %d bytes', $maxSizeToCheck),
+            ];
+        }
+        
         file_put_contents($filepath, $input, FILE_APPEND);
         
         $metadata['offset'] += strlen($input);
@@ -290,15 +345,18 @@ class FileUploadHandler
         ];
     }
     
-    private function tusOptions()
+    private function tusOptions($maxSize = null)
     {
+        // Use maxSize if provided, otherwise fall back to config
+        $tusMaxSize = $maxSize ?? ($this->config['tus']['max_size'] ?? 104857600);
+        
         return [
             'success' => true,
             'headers' => [
                 'Tus-Resumable' => '1.0.0',
                 'Tus-Version' => '1.0.0',
                 'Tus-Extension' => 'creation,termination',
-                'Tus-Max-Size' => $this->config['tus']['max_size'],
+                'Tus-Max-Size' => $tusMaxSize,
             ],
         ];
     }

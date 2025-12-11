@@ -156,6 +156,23 @@
     </div>
     
     <script>
+        // Detect base path from current URL
+        function getBasePath() {
+            const path = window.location.pathname;
+            // If we're at /mock-server/auth/login, base path is /mock-server
+            // If we're at /auth/login, base path is empty
+            const match = path.match(/^(\/[^\/]+)?\/auth\/login/);
+            return match && match[1] ? match[1] : '';
+        }
+        
+        const basePath = getBasePath();
+        
+        // Update Google sign-in link with correct base path
+        const googleBtn = document.querySelector('.google-btn');
+        if (googleBtn) {
+            googleBtn.href = basePath + '/auth/google';
+        }
+        
         // Check for error in URL
         const urlParams = new URLSearchParams(window.location.search);
         const error = urlParams.get('error');

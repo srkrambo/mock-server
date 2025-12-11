@@ -234,11 +234,22 @@
             <div id="result-content"></div>
         </div>
         
-        <a href="/auth/login" class="back-link">← Back to Login</a>
+        <a href="#" class="back-link" id="back-link">← Back to Login</a>
     </div>
     
     <script>
         let jwtToken = '';
+        
+        // Detect base path from current URL
+        function getBasePath() {
+            const path = window.location.pathname;
+            // If we're at /mock-server/auth/generate-key, base path is /mock-server
+            // If we're at /auth/generate-key, base path is empty
+            const match = path.match(/^(\/[^\/]+)?\/auth\/generate-key/);
+            return match && match[1] ? match[1] : '';
+        }
+        
+        const basePath = getBasePath();
         
         // Get token from URL
         function init() {
@@ -249,6 +260,9 @@
                 showError('No authentication token found. Please login again.');
                 document.getElementById('submit-btn').disabled = true;
             }
+            
+            // Update back link with base path
+            document.getElementById('back-link').href = basePath + '/auth/login';
         }
         
         // Handle form submission
@@ -274,7 +288,7 @@
             if (notes) metadata.notes = notes;
             
             try {
-                const response = await fetch('/api/generate-key', {
+                const response = await fetch(basePath + '/api/generate-key', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

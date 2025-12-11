@@ -1076,7 +1076,7 @@ class Router
                     'picture' => $result['user']['picture'] ?? '',
                 ];
                 
-                header('Location: /auth/success?' . http_build_query($params));
+                header('Location: mock-server/auth/success?' . http_build_query($params));
                 exit;
             }
         } else {

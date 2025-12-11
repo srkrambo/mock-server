@@ -18,5 +18,10 @@
 .DS_Store
 Thumbs.db
 
+#security
+.htaccess
+.env
+
+
 # Logs
 *.log

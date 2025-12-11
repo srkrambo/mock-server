@@ -906,6 +906,16 @@ class Router
     }
     
     /**
+     * Check if the client prefers JSON response
+     * @return bool
+     */
+    private function isJsonRequest()
+    {
+        $acceptHeader = $this->request->getHeader('Accept') ?? '';
+        return strpos($acceptHeader, 'application/json') !== false;
+    }
+    
+    /**
      * Serve static HTML file
      */
     private function serveStaticFile($path)
@@ -959,10 +969,7 @@ class Router
         $error = $_GET['error'] ?? null;
         
         if ($error) {
-            // Check if client wants JSON response
-            $acceptHeader = $this->request->getHeader('Accept') ?? '';
-            
-            if (strpos($acceptHeader, 'application/json') !== false) {
+            if ($this->isJsonRequest()) {
                 $this->response
                     ->json([
                         'error' => 'Authentication Failed',
@@ -978,10 +985,7 @@ class Router
         }
         
         if (!$code || !$state) {
-            // Check if client wants JSON response
-            $acceptHeader = $this->request->getHeader('Accept') ?? '';
-            
-            if (strpos($acceptHeader, 'application/json') !== false) {
+            if ($this->isJsonRequest()) {
                 $this->response
                     ->json([
                         'error' => 'Bad Request',
@@ -998,10 +1002,7 @@ class Router
         $result = $this->authHandler->handleGoogleCallback($code, $state);
         
         if ($result['success']) {
-            // Check if client wants JSON response
-            $acceptHeader = $this->request->getHeader('Accept') ?? '';
-            
-            if (strpos($acceptHeader, 'application/json') !== false) {
+            if ($this->isJsonRequest()) {
                 $this->response
                     ->json([
                         'success' => true,
@@ -1028,10 +1029,7 @@ class Router
                 exit;
             }
         } else {
-            // Check if client wants JSON response
-            $acceptHeader = $this->request->getHeader('Accept') ?? '';
-            
-            if (strpos($acceptHeader, 'application/json') !== false) {
+            if ($this->isJsonRequest()) {
                 $this->response
                     ->json([
                         'error' => 'Authentication Failed',

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PHP Mock Server - MAMP Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .info-box {
+            background-color: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .success-box {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .test-section {
+            background-color: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .url-display {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+        }
+        .status-ok {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .status-error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 PHP Mock Server - MAMP Test Page</h1>
+    
+    <div class="success-box">
+        <strong>✓ Success!</strong> If you can see this page, your MAMP setup is working correctly!
+    </div>
+    
+    <div class="info-box">
+        <strong>Current URL:</strong> <span id="currentUrl"></span><br>
+        <strong>Base Path:</strong> This will be automatically detected by the server
+    </div>
+    
+    <div class="test-section">
+        <h2>Test API Endpoints</h2>
+        <p>Click the buttons below to test various API endpoints:</p>
+        
+        <h3>1. List Resources</h3>
+        <button onclick="testEndpoint('GET', '/resources')">GET /resources</button>
+        <div id="result-resources" class="result" style="display:none;"></div>
+        
+        <h3>2. Create User</h3>
+        <button onclick="testEndpoint('POST', '/users/test1', {name: 'John Doe', email: 'john@example.com'})">
+            POST /users/test1
+        </button>
+        <div id="result-create" class="result" style="display:none;"></div>
+        
+        <h3>3. Get User</h3>
+        <button onclick="testEndpoint('GET', '/users/test1')">GET /users/test1</button>
+        <div id="result-get" class="result" style="display:none;"></div>
+        
+        <h3>4. Update User</h3>
+        <button onclick="testEndpoint('PUT', '/users/test1', {name: 'John Smith', email: 'john.smith@example.com'})">
+            PUT /users/test1
+        </button>
+        <div id="result-update" class="result" style="display:none;"></div>
+        
+        <h3>5. Delete User</h3>
+        <button onclick="testEndpoint('DELETE', '/users/test1')">DELETE /users/test1</button>
+        <div id="result-delete" class="result" style="display:none;"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Setup Instructions</h2>
+        <ol>
+            <li><strong>Copy</strong> the mock-server folder to your MAMP htdocs directory</li>
+            <li><strong>Start MAMP</strong> and ensure Apache is running</li>
+            <li><strong>Access</strong> the server at the URL shown above</li>
+            <li><strong>Test</strong> the API using the buttons above or curl commands</li>
+        </ol>
+        
+        <h3>Example curl commands:</h3>
+        <div class="url-display">
+# Create a resource
+curl -X POST <span id="baseUrl1"></span>/users/1 \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Alice", "email": "alice@example.com"}'
+
+# Get a resource
+curl <span id="baseUrl2"></span>/users/1
+
+# List all resources
+curl <span id="baseUrl3"></span>/resources
+        </div>
+    </div>
+
+    <script>
+        // Detect current URL and base path
+        const currentUrl = window.location.href.replace(/test-mamp\.html.*$/, '');
+        document.getElementById('currentUrl').textContent = currentUrl;
+        document.getElementById('baseUrl1').textContent = currentUrl;
+        document.getElementById('baseUrl2').textContent = currentUrl;
+        document.getElementById('baseUrl3').textContent = currentUrl;
+        
+        async function testEndpoint(method, endpoint, body = null) {
+            const resultId = 'result-' + endpoint.split('/')[1];
+            const resultDiv = document.getElementById(resultId);
+            
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = 'Loading...';
+            
+            try {
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+                
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+                
+                const response = await fetch(currentUrl + endpoint, options);
+                const data = await response.json();
+                
+                const statusClass = response.ok ? 'status-ok' : 'status-error';
+                resultDiv.innerHTML = `<span class="${statusClass}">Status: ${response.status} ${response.statusText}</span>\n\n` +
+                                     JSON.stringify(data, null, 2);
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="status-error">Error: ${error.message}</span>`;
+            }
+        }
+    </script>
+</body>
+</html>

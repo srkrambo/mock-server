@@ -265,7 +265,7 @@ curl http://localhost:8080/users/1 \
 #### Setting up Google OAuth
 
 1. Create a Google Cloud Console project at https://console.cloud.google.com/
-2. Enable Google+ API
+2. Enable Google OAuth 2.0 (enabled by default for new projects)
 3. Create OAuth 2.0 credentials
 4. Configure environment variables:
    ```bash

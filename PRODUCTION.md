@@ -113,9 +113,10 @@ API key generation requires Google OAuth authentication. Set up your credentials
    - Go to https://console.cloud.google.com/
    - Create a new project or select an existing one
 
-2. **Enable Google+ API**
+2. **Enable Required APIs**
    - In the project, go to "APIs & Services" > "Library"
-   - Search for "Google+ API" and enable it
+   - Search for "Google Identity Services" or ensure OAuth 2.0 is enabled
+   - Note: No additional API needs to be explicitly enabled for basic OAuth 2.0 authentication
 
 3. **Create OAuth 2.0 Credentials**
    - Go to "APIs & Services" > "Credentials"

@@ -768,17 +768,8 @@ class Router
         $requireAuth = $this->config['auth']['production_api_keys']['require_authentication'] ?? false;
         
         if ($requireAuth) {
-            // Verify Google authentication
-            $headers = $this->request->getHeaders();
-            
-            // Temporarily set auth method to Google for validation
-            $originalMethod = $this->config['auth']['default_method'];
-            $this->authHandler->setAuthMethod('google');
-            
-            $authResult = $this->authHandler->authenticate($headers);
-            
-            // Restore original method
-            $this->authHandler->setAuthMethod($originalMethod);
+            // Verify Google authentication using a dedicated method
+            $authResult = $this->verifyGoogleAuth();
             
             if (!$authResult['success']) {
                 $this->response
@@ -884,6 +875,21 @@ class Router
             return $this->config['server']['production_max_upload_size'] ?? (1 * 1024); // 1KB default
         }
         return $this->config['server']['max_upload_size'] ?? (50 * 1024 * 1024); // 50MB default
+    }
+    
+    /**
+     * Verify Google authentication for API key generation
+     * Returns authentication result without modifying global auth state
+     */
+    private function verifyGoogleAuth()
+    {
+        $headers = $this->request->getHeaders();
+        
+        // Create a temporary auth handler with Google method
+        $tempAuthHandler = new AuthHandler($this->config);
+        $tempAuthHandler->setAuthMethod('google');
+        
+        return $tempAuthHandler->authenticate($headers);
     }
     
     /**

@@ -250,14 +250,21 @@ class AuthHandler
                 
                 // Verify the JWT token contains Google issuer
                 $decoded = $this->decodeJWT($token);
-                if ($decoded && isset($decoded['iss']) && 
-                    (strpos($decoded['iss'], 'accounts.google.com') !== false || 
-                     strpos($decoded['iss'], 'mock-server') !== false)) {
-                    return [
-                        'success' => true, 
-                        'user' => $decoded['email'] ?? $decoded['sub'] ?? 'google-user',
-                        'token_data' => $decoded
+                if ($decoded && isset($decoded['iss'])) {
+                    // Use exact matching for security - accept both Google and mock-server for testing
+                    $validIssuers = [
+                        'https://accounts.google.com',
+                        'accounts.google.com',
+                        $this->config['auth']['openid']['issuer'] ?? 'mock-server'
                     ];
+                    
+                    if (in_array($decoded['iss'], $validIssuers, true)) {
+                        return [
+                            'success' => true, 
+                            'user' => $decoded['email'] ?? $decoded['sub'] ?? 'google-user',
+                            'token_data' => $decoded
+                        ];
+                    }
                 }
             }
         }
@@ -384,12 +391,25 @@ class AuthHandler
         curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/x-www-form-urlencoded']);
+        // Security: Enable SSL certificate verification
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         
         $response = curl_exec($ch);
+        
+        // Check for cURL errors
+        if ($response === false) {
+            $error = curl_error($ch);
+            curl_close($ch);
+            error_log("Google OAuth token exchange failed: " . $error);
+            return null;
+        }
+        
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
         
         if ($httpCode !== 200) {
+            error_log("Google OAuth token exchange failed with HTTP code: " . $httpCode);
             return null;
         }
         
@@ -406,12 +426,25 @@ class AuthHandler
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Authorization: Bearer ' . $accessToken
         ]);
+        // Security: Enable SSL certificate verification
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         
         $response = curl_exec($ch);
+        
+        // Check for cURL errors
+        if ($response === false) {
+            $error = curl_error($ch);
+            curl_close($ch);
+            error_log("Google user info fetch failed: " . $error);
+            return null;
+        }
+        
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
         
         if ($httpCode !== 200) {
+            error_log("Google user info fetch failed with HTTP code: " . $httpCode);
             return null;
         }
         

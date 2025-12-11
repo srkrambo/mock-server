@@ -183,8 +183,8 @@ class DataHandler
                 
                 // Delete files older than cutoff time
                 if ($modifiedTime < $cutoffTime) {
-                    $resource = $this->getResourceFromFilename($file);
                     if (unlink($filepath)) {
+                        $resource = $this->getResourceFromFilename($file);
                         $deletedCount++;
                         $deletedFiles[] = $resource;
                     }

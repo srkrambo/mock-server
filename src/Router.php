@@ -3,11 +3,13 @@
 namespace MockServer;
 
 use MockServer\Auth\AuthHandler;
+use MockServer\Auth\ApiKeyManager;
 use MockServer\Handlers\DataHandler;
 use MockServer\Handlers\FileUploadHandler;
 use MockServer\Utils\Request;
 use MockServer\Utils\Response;
 use MockServer\Utils\HeaderValidator;
+use MockServer\Utils\RateLimiter;
 
 class Router
 {
@@ -17,6 +19,8 @@ class Router
     private $fileHandler;
     private $request;
     private $response;
+    private $rateLimiter;
+    private $apiKeyManager;
     
     public function __construct($config)
     {
@@ -26,6 +30,8 @@ class Router
         $this->fileHandler = new FileUploadHandler($config);
         $this->request = new Request();
         $this->response = new Response();
+        $this->rateLimiter = new RateLimiter($config);
+        $this->apiKeyManager = new ApiKeyManager($config);
     }
     
     public function handleRequest()
@@ -43,13 +49,41 @@ class Router
             return;
         }
         
-        // Special routes
+        // Check rate limits (before authentication)
+        if ($this->config['rate_limit']['enabled']) {
+            $rateLimitResult = $this->checkRateLimits($uri);
+            if (!$rateLimitResult['allowed']) {
+                $this->response
+                    ->setHeader('X-RateLimit-Limit', $rateLimitResult['limit'] ?? 0)
+                    ->setHeader('X-RateLimit-Remaining', $rateLimitResult['remaining'] ?? 0)
+                    ->setHeader('X-RateLimit-Reset', $rateLimitResult['reset_at'] ?? 0)
+                    ->json([
+                        'error' => 'Too Many Requests',
+                        'message' => 'Rate limit exceeded. Please try again later.',
+                        'retry_after' => $rateLimitResult['reset_at'] - time(),
+                    ], 429)
+                    ->send();
+                return;
+            }
+        }
+        
+        // Special routes that don't require authentication
         if ($uri === '/login' && $method === 'POST') {
             return $this->handleLogin();
         }
         
         if ($uri === '/oauth/token' && $method === 'POST') {
             return $this->handleOAuthToken();
+        }
+        
+        // API key generation endpoint (for production)
+        if ($uri === '/api/generate-key' && $method === 'POST') {
+            return $this->handleGenerateApiKey();
+        }
+        
+        // API key listing endpoint
+        if ($uri === '/api/keys' && $method === 'GET') {
+            return $this->handleListApiKeys();
         }
         
         if (strpos($uri, '/upload') === 0) {
@@ -64,17 +98,31 @@ class Router
             return $this->handleListResources();
         }
         
-        // Authenticate request
-        $authResult = $this->authHandler->authenticate($headers, $method);
-        
-        if (!$authResult['success']) {
-            $this->response
-                ->json([
-                    'error' => 'Authentication failed',
-                    'message' => $authResult['error'],
-                ], 401)
-                ->send();
-            return;
+        // Check production mode API key requirement
+        if ($this->isProductionMode() && $this->config['auth']['production_enforce_api_key']) {
+            $apiKeyResult = $this->checkApiKey($headers);
+            if (!$apiKeyResult['valid']) {
+                $this->response
+                    ->json([
+                        'error' => 'Unauthorized',
+                        'message' => 'API key is required in production mode. Please provide a valid API key via X-API-Key header.',
+                    ], 401)
+                    ->send();
+                return;
+            }
+        } else {
+            // Authenticate request for non-production or when API key is not enforced
+            $authResult = $this->authHandler->authenticate($headers, $method);
+            
+            if (!$authResult['success']) {
+                $this->response
+                    ->json([
+                        'error' => 'Authentication failed',
+                        'message' => $authResult['error'],
+                    ], 401)
+                    ->send();
+                return;
+            }
         }
         
         // Route to appropriate handler
@@ -136,9 +184,24 @@ class Router
             return;
         }
         
+        // Check upload size for file uploads
+        $maxUploadSize = $this->getMaxUploadSize();
+        
         // Check if this is a file upload
         if (strpos($contentType, 'multipart/form-data') !== false) {
-            $result = $this->fileHandler->handleMultipartUpload();
+            // Validate upload size
+            $contentLength = $this->request->getHeader('Content-Length');
+            if ($contentLength && (int)$contentLength > $maxUploadSize) {
+                $this->response
+                    ->json([
+                        'error' => 'Payload Too Large',
+                        'message' => sprintf('Upload size exceeds maximum allowed size of %d bytes', $maxUploadSize),
+                    ], 413)
+                    ->send();
+                return;
+            }
+            
+            $result = $this->fileHandler->handleMultipartUpload($maxUploadSize);
             $this->response
                 ->json($result, $result['success'] ? 201 : 400)
                 ->send();
@@ -147,7 +210,7 @@ class Router
         
         // Check if this is base64 encoded file
         if (is_array($body) && isset($body['type']) && $body['type'] === 'base64') {
-            $result = $this->fileHandler->handleBase64Upload($body);
+            $result = $this->fileHandler->handleBase64Upload($body, $maxUploadSize);
             $this->response
                 ->json($result, $result['success'] ? 201 : 400)
                 ->send();
@@ -226,7 +289,7 @@ class Router
             
             // Extract filename from URI
             $filename = basename($uri);
-            $result = $this->fileHandler->handleRawUpload($filename);
+            $result = $this->fileHandler->handleRawUpload($filename, $maxUploadSize);
             
             $this->response
                 ->json($result, $result['success'] ? 200 : 400)
@@ -364,6 +427,7 @@ class Router
         $headers = $this->request->getHeaders();
         $uri = $this->request->getUri();
         $contentType = $this->request->getHeader('Content-Type') ?? '';
+        $maxUploadSize = $this->getMaxUploadSize();
         
         // Check for TUS protocol
         if (isset($headers['Tus-Resumable'])) {
@@ -379,7 +443,7 @@ class Router
                 return;
             }
             
-            $result = $this->fileHandler->handleTusUpload($method, $headers);
+            $result = $this->fileHandler->handleTusUpload($method, $headers, $maxUploadSize);
             
             if (isset($result['headers'])) {
                 $this->response->setHeaders($result['headers']);
@@ -409,11 +473,23 @@ class Router
                 return;
             }
             
+            // Validate upload size
+            $contentLength = $this->request->getHeader('Content-Length');
+            if ($contentLength && (int)$contentLength > $maxUploadSize) {
+                $this->response
+                    ->json([
+                        'error' => 'Payload Too Large',
+                        'message' => sprintf('Upload size exceeds maximum allowed size of %d bytes', $maxUploadSize),
+                    ], 413)
+                    ->send();
+                return;
+            }
+            
             // Check for base64 encoded upload (JSON with type: base64)
             if (strpos($contentType, 'application/json') !== false) {
                 $body = $this->request->getBody();
                 if (is_array($body) && isset($body['type']) && $body['type'] === 'base64') {
-                    $result = $this->fileHandler->handleBase64Upload($body);
+                    $result = $this->fileHandler->handleBase64Upload($body, $maxUploadSize);
                     $this->response
                         ->json($result, $result['success'] ? 201 : 400)
                         ->send();
@@ -422,9 +498,9 @@ class Router
             }
             
             if (strpos($contentType, 'multipart/form-data') !== false) {
-                $result = $this->fileHandler->handleMultipartUpload();
+                $result = $this->fileHandler->handleMultipartUpload($maxUploadSize);
             } else {
-                $result = $this->fileHandler->handleRawUpload();
+                $result = $this->fileHandler->handleRawUpload(null, $maxUploadSize);
             }
             
             $this->response
@@ -447,7 +523,7 @@ class Router
             if ($contentLength) {
                 $validation = HeaderValidator::validateContentLength(
                     $contentLength,
-                    $this->config['server']['max_upload_size']
+                    $maxUploadSize
                 );
                 
                 if (!$validation['valid']) {
@@ -463,7 +539,7 @@ class Router
             
             // Extract filename from URI
             $filename = basename($uri);
-            $result = $this->fileHandler->handleRawUpload($filename);
+            $result = $this->fileHandler->handleRawUpload($filename, $maxUploadSize);
             
             $this->response
                 ->json($result, $result['success'] ? 201 : 400)
@@ -595,5 +671,165 @@ class Router
                 ->json(['error' => 'invalid_client'], 401)
                 ->send();
         }
+    }
+    
+    /**
+     * Check rate limits
+     */
+    private function checkRateLimits($uri)
+    {
+        $ip = $this->getClientIp();
+        
+        // Check IP-based rate limit
+        $ipLimit = $this->rateLimiter->checkIpLimit($ip);
+        if (!$ipLimit['allowed']) {
+            return $ipLimit;
+        }
+        
+        // Check global rate limit
+        $globalLimit = $this->rateLimiter->checkGlobalLimit();
+        if (!$globalLimit['allowed']) {
+            return $globalLimit;
+        }
+        
+        // Check endpoint-specific rate limit
+        $endpointLimit = $this->rateLimiter->checkEndpointLimit($ip, $uri);
+        if (!$endpointLimit['allowed']) {
+            return $endpointLimit;
+        }
+        
+        return ['allowed' => true];
+    }
+    
+    /**
+     * Get client IP address
+     */
+    private function getClientIp()
+    {
+        // In production, prefer REMOTE_ADDR to prevent header spoofing
+        if ($this->isProductionMode()) {
+            return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        }
+        
+        // In local mode, allow forwarded headers for development/testing
+        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            // Get first IP from comma-separated list
+            $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+            return trim($ips[0]);
+        } elseif (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+            return $_SERVER['HTTP_CLIENT_IP'];
+        } else {
+            return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        }
+    }
+    
+    /**
+     * Check if in production mode
+     */
+    private function isProductionMode()
+    {
+        return ($this->config['environment']['mode'] ?? 'local') === 'production';
+    }
+    
+    /**
+     * Check API key from headers
+     */
+    private function checkApiKey($headers)
+    {
+        $apiKey = $headers['X-API-Key'] ?? $headers['X-Api-Key'] ?? null;
+        
+        if (!$apiKey) {
+            return ['valid' => false];
+        }
+        
+        return $this->apiKeyManager->validateKey($apiKey);
+    }
+    
+    /**
+     * Handle API key generation
+     */
+    private function handleGenerateApiKey()
+    {
+        $contentType = $this->request->getHeader('Content-Type') ?? '';
+        
+        // Validate Content-Type
+        if (!empty($contentType) && strpos($contentType, 'application/json') === false) {
+            $this->response
+                ->json([
+                    'error' => 'Bad Request',
+                    'message' => 'Content-Type must be application/json',
+                ], 400)
+                ->send();
+            return;
+        }
+        
+        $body = $this->request->getBody();
+        $metadata = is_array($body) ? ($body['metadata'] ?? []) : [];
+        
+        // Generate new API key
+        $keyData = $this->apiKeyManager->generateKey($metadata);
+        
+        $this->response
+            ->json([
+                'success' => true,
+                'message' => 'API key generated successfully',
+                'api_key' => $keyData['key'],
+                'created_at' => $keyData['created_at'],
+                'usage_instructions' => 'Include this API key in the X-API-Key header for all requests',
+            ], 201)
+            ->send();
+    }
+    
+    /**
+     * Handle API key listing
+     */
+    private function handleListApiKeys()
+    {
+        // In production mode, require API key for listing
+        if ($this->isProductionMode()) {
+            $headers = $this->request->getHeaders();
+            $apiKeyResult = $this->checkApiKey($headers);
+            
+            if (!$apiKeyResult['valid']) {
+                $this->response
+                    ->json([
+                        'error' => 'Unauthorized',
+                        'message' => 'API key is required to list API keys',
+                    ], 401)
+                    ->send();
+                return;
+            }
+        }
+        
+        $keys = $this->apiKeyManager->listKeys();
+        
+        // Mask API keys for security (show only first and last 4 characters)
+        $maskedKeys = array_map(function($key) {
+            $keyStr = $key['key'];
+            $masked = substr($keyStr, 0, 7) . '...' . substr($keyStr, -4);
+            $key['key_masked'] = $masked;
+            unset($key['key']); // Don't expose full key
+            return $key;
+        }, $keys);
+        
+        $this->response
+            ->json([
+                'success' => true,
+                'keys' => $maskedKeys,
+                'total' => count($maskedKeys),
+                'note' => 'Keys are masked for security. Use the full key provided during generation.',
+            ])
+            ->send();
+    }
+    
+    /**
+     * Get maximum upload size based on environment
+     */
+    private function getMaxUploadSize()
+    {
+        if ($this->isProductionMode()) {
+            return $this->config['server']['production_max_upload_size'] ?? (1 * 1024); // 1KB default
+        }
+        return $this->config['server']['max_upload_size'] ?? (50 * 1024 * 1024); // 50MB default
     }
 }

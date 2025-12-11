@@ -4,24 +4,60 @@
  */
 
 return [
+    // Environment settings
+    'environment' => [
+        // Set to 'production' to enable production features (rate limiting, API key enforcement)
+        'mode' => getenv('MOCK_SERVER_ENV') ?: 'local', // 'local' or 'production'
+    ],
+    
     // Storage paths
     'storage' => [
         'data' => __DIR__ . '/storage/data',
         'uploads' => __DIR__ . '/storage/uploads',
         'sessions' => __DIR__ . '/storage/sessions',
+        'rate_limits' => __DIR__ . '/storage/rate_limits',
+        'api_keys' => __DIR__ . '/storage/api_keys',
     ],
     
     // Server settings
     'server' => [
         'base_url' => 'http://localhost:8080',
-        'max_upload_size' => 50 * 1024 * 1024, // 50MB
+        'max_upload_size' => 50 * 1024 * 1024, // 50MB for local development
+        'production_max_upload_size' => 1 * 1024, // 1KB for production (configurable)
         'allowed_file_types' => ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'txt', 'doc', 'docx', 'zip'],
+    ],
+    
+    // Rate limiting settings
+    'rate_limit' => [
+        'enabled' => true, // Enable rate limiting
+        'ip_based' => [
+            'enabled' => true,
+            'max_requests' => 100, // Maximum requests per IP
+            'window' => 60, // Time window in seconds (1 minute)
+        ],
+        'global' => [
+            'enabled' => true,
+            'max_requests' => 1000, // Maximum total requests
+            'window' => 60, // Time window in seconds (1 minute)
+        ],
+        'endpoint_specific' => [
+            '/upload' => [
+                'max_requests' => 10,
+                'window' => 60,
+            ],
+            '/login' => [
+                'max_requests' => 5,
+                'window' => 300, // 5 minutes
+            ],
+        ],
     ],
     
     // Authentication settings
     'auth' => [
         'enabled' => true,
         'default_method' => 'none', // none, basic, api_key, jwt, oauth2, mtls, openid
+        // In production mode, API key authentication is enforced regardless of default_method
+        'production_enforce_api_key' => true, // Enforce API key in production mode
         
         // Basic Auth
         'basic' => [
@@ -31,13 +67,19 @@ return [
             ],
         ],
         
-        // API Keys
+        // API Keys - for local development
         'api_keys' => [
             'valid_keys' => [
                 'test-api-key-123',
                 'demo-key-456',
                 'dev-key-789',
             ],
+        ],
+        
+        // Production API Keys - stored in file system for production
+        'production_api_keys' => [
+            'storage_enabled' => true, // Store API keys in file system
+            'require_authentication' => false, // Don't require auth for API key generation (for now)
         ],
         
         // JWT

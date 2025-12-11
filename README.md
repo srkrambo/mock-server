@@ -63,6 +63,17 @@ Edit `config.php` to customize:
 - Authentication settings
 - CORS settings
 - TUS protocol settings
+- **Production mode settings** (rate limiting, upload limits, API keys)
+
+### Production Mode
+
+For production deployments with enhanced security:
+- **Rate limiting** (IP-based, global, and endpoint-specific)
+- **Upload size limits** (configurable, default 1KB in production)
+- **API key authentication** (enforced in production mode)
+- **File-based storage** (no external database required)
+
+See [PRODUCTION.md](PRODUCTION.md) for detailed production configuration and usage.
 
 ## Usage Examples
 
@@ -224,12 +235,30 @@ curl http://localhost:8080/resources
 curl http://localhost:8080/files
 ```
 
+### 6. Production API Key Management
+
+```bash
+# Generate a new API key
+curl -X POST http://localhost:8080/api/generate-key \
+  -H "Content-Type: application/json" \
+  -d '{"metadata": {"description": "My API key"}}'
+
+# List all API keys
+curl http://localhost:8080/api/keys
+
+# Use API key in requests (required in production mode)
+curl http://localhost:8080/users/1 \
+  -H "X-API-Key: mk_your_api_key_here"
+```
+
 ## API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/login` | Dummy login endpoint, returns JWT token |
 | POST | `/oauth/token` | OAuth 2.0 token endpoint |
+| POST | `/api/generate-key` | Generate a new API key (for production) |
+| GET | `/api/keys` | List all API keys |
 | POST | `/upload` | Upload files (multipart or raw) |
 | POST/PATCH/HEAD | `/upload/{id}` | TUS resumable upload operations |
 | GET | `/files` | List all uploaded files |

@@ -2,6 +2,8 @@
 /storage/data/*
 /storage/uploads/*
 /storage/sessions/*
+/storage/rate_limits/*
+/storage/api_keys/*
 
 # Keep directory structure
 !.gitkeep

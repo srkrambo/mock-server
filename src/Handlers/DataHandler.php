@@ -51,7 +51,7 @@ class DataHandler
         $filepath = $this->dataDir . '/' . $filename;
         
         if (!file_exists($filepath)) {
-            return ['success' => false, 'error' => 'Resource not found'];
+            return ['success' => false, 'error' => sprintf("Resource '%s' not found", $resource)];
         }
         
         $content = file_get_contents($filepath);

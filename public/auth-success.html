@@ -238,9 +238,9 @@
         <div class="info-box">
             <h3>💡 How to use your token:</h3>
             <p>Use this token in the Authorization header to generate API keys and make authenticated requests.</p>
-            <div class="code-example">
+            <div class="code-example" id="code-example">
 <span class="comment"># Generate an API key</span>
-curl -X POST http://localhost:8080/api/generate-key \
+<span id="curl-command">curl -X POST http://localhost:8080/api/generate-key \</span>
   -H <span class="string">"Content-Type: application/json"</span> \
   -H <span class="string">"Authorization: Bearer YOUR_TOKEN_HERE"</span> \
   -d <span class="string">'{"metadata": {"description": "My API key"}}'</span>
@@ -249,13 +249,24 @@ curl -X POST http://localhost:8080/api/generate-key \
         
         <div class="action-buttons">
             <a href="#" class="btn btn-primary" id="generate-key-btn">Generate API Key</a>
-            <a href="/auth/login" class="btn btn-secondary">Back to Login</a>
+            <a href="#" class="btn btn-secondary" id="back-to-login-btn">Back to Login</a>
         </div>
     </div>
     
     <script>
         let jwtToken = '';
         let userData = {};
+        
+        // Detect base path from current URL
+        function getBasePath() {
+            const path = window.location.pathname;
+            // If we're at /mock-server/auth/success, base path is /mock-server
+            // If we're at /auth/success, base path is empty
+            const match = path.match(/^(\/[^\/]+)?\/auth\/success/);
+            return match && match[1] ? match[1] : '';
+        }
+        
+        const basePath = getBasePath();
         
         // Parse URL parameters
         function getUrlParams() {
@@ -286,11 +297,24 @@ curl -X POST http://localhost:8080/api/generate-key \
                     displayUserInfo();
                 }
                 
-                // Set up generate key button
-                document.getElementById('generate-key-btn').href = `/auth/generate-key?token=${encodeURIComponent(jwtToken)}`;
+                // Set up generate key button with base path
+                document.getElementById('generate-key-btn').href = basePath + `/auth/generate-key?token=${encodeURIComponent(jwtToken)}`;
             } else {
                 document.getElementById('token-display').textContent = 'No token found. Please authenticate again.';
                 document.getElementById('copy-btn').disabled = true;
+            }
+            
+            // Set up back to login button with base path
+            document.getElementById('back-to-login-btn').href = basePath + '/auth/login';
+            
+            // Update curl command with base path
+            const curlCommand = document.getElementById('curl-command');
+            if (curlCommand) {
+                const port = window.location.port || '80';
+                const protocol = window.location.protocol;
+                const hostname = window.location.hostname;
+                const baseUrl = `${protocol}//${hostname}${port !== '80' && port !== '443' ? ':' + port : ''}${basePath}`;
+                curlCommand.textContent = `curl -X POST ${baseUrl}/api/generate-key \\`;
             }
         }
         

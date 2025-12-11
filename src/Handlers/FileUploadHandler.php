@@ -148,7 +148,12 @@ class FileUploadHandler
         $tusResumable = $headers['Tus-Resumable'] ?? null;
         
         if (!$tusResumable) {
-            return ['success' => false, 'error' => 'TUS protocol not detected'];
+            return ['success' => false, 'error' => 'TUS protocol not detected - Tus-Resumable header missing'];
+        }
+        
+        // Validate TUS version
+        if ($tusResumable !== '1.0.0') {
+            return ['success' => false, 'error' => 'Unsupported TUS version. Only 1.0.0 is supported'];
         }
         
         switch ($method) {

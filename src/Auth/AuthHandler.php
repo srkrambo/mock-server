@@ -45,7 +45,11 @@ class AuthHandler
         
         $auth = $headers['Authorization'];
         if (!preg_match('/^Basic\s+(.+)$/i', $auth, $matches)) {
-            return ['success' => false, 'error' => 'Invalid Basic Auth format'];
+            return ['success' => false, 'error' => 'Invalid Basic Auth format. Expected: Basic <base64-credentials>'];
+        }
+        
+        if (empty($matches[1])) {
+            return ['success' => false, 'error' => 'Empty credentials in Authorization header'];
         }
         
         $credentials = base64_decode($matches[1]);
@@ -83,7 +87,11 @@ class AuthHandler
         
         $auth = $headers['Authorization'];
         if (!preg_match('/^Bearer\s+(.+)$/i', $auth, $matches)) {
-            return ['success' => false, 'error' => 'Invalid Bearer token format'];
+            return ['success' => false, 'error' => 'Invalid Bearer token format. Expected: Bearer <token>'];
+        }
+        
+        if (empty($matches[1])) {
+            return ['success' => false, 'error' => 'Empty token in Authorization header'];
         }
         
         $token = $matches[1];

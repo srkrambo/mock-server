@@ -7,6 +7,7 @@ use MockServer\Handlers\DataHandler;
 use MockServer\Handlers\FileUploadHandler;
 use MockServer\Utils\Request;
 use MockServer\Utils\Response;
+use MockServer\Utils\HeaderValidator;
 
 class Router
 {
@@ -121,7 +122,19 @@ class Router
     private function handlePost($uri)
     {
         $body = $this->request->getBody();
+        $headers = $this->request->getHeaders();
         $contentType = $this->request->getHeader('Content-Type') ?? '';
+        
+        // Validate Content-Type header is present for POST requests
+        if (empty($contentType)) {
+            $this->response
+                ->json([
+                    'error' => 'Bad Request',
+                    'message' => 'Content-Type header is required for POST requests',
+                ], 400)
+                ->send();
+            return;
+        }
         
         // Check if this is a file upload
         if (strpos($contentType, 'multipart/form-data') !== false) {
@@ -137,6 +150,18 @@ class Router
             $result = $this->fileHandler->handleBase64Upload($body);
             $this->response
                 ->json($result, $result['success'] ? 201 : 400)
+                ->send();
+            return;
+        }
+        
+        // Validate JSON content type for regular data
+        if (strpos($contentType, 'application/json') === false && 
+            strpos($contentType, 'application/x-www-form-urlencoded') === false) {
+            $this->response
+                ->json([
+                    'error' => 'Unsupported Media Type',
+                    'message' => 'Content-Type must be application/json or application/x-www-form-urlencoded for data storage',
+                ], 415)
                 ->send();
             return;
         }
@@ -161,13 +186,43 @@ class Router
     private function handlePut($uri)
     {
         $body = $this->request->getBody();
+        $headers = $this->request->getHeaders();
         $contentType = $this->request->getHeader('Content-Type') ?? '';
         
-        // Check if this is a raw binary upload
+        // Validate Content-Type header is present
+        if (empty($contentType)) {
+            $this->response
+                ->json([
+                    'error' => 'Bad Request',
+                    'message' => 'Content-Type header is required for PUT requests',
+                ], 400)
+                ->send();
+            return;
+        }
+        
+        // Validate Content-Length for binary uploads
         if (strpos($contentType, 'application/octet-stream') !== false ||
             strpos($contentType, 'image/') !== false ||
             strpos($contentType, 'video/') !== false ||
             strpos($contentType, 'audio/') !== false) {
+            
+            $contentLength = HeaderValidator::getHeader($headers, 'Content-Length');
+            if ($contentLength) {
+                $validation = HeaderValidator::validateContentLength(
+                    $contentLength, 
+                    $this->config['server']['max_upload_size']
+                );
+                
+                if (!$validation['valid']) {
+                    $this->response
+                        ->json([
+                            'error' => 'Bad Request',
+                            'message' => $validation['error'],
+                        ], 400)
+                        ->send();
+                    return;
+                }
+            }
             
             // Extract filename from URI
             $filename = basename($uri);
@@ -175,6 +230,17 @@ class Router
             
             $this->response
                 ->json($result, $result['success'] ? 200 : 400)
+                ->send();
+            return;
+        }
+        
+        // Validate JSON content type for regular data
+        if (strpos($contentType, 'application/json') === false) {
+            $this->response
+                ->json([
+                    'error' => 'Unsupported Media Type',
+                    'message' => 'Content-Type must be application/json for data updates',
+                ], 415)
                 ->send();
             return;
         }
@@ -207,6 +273,29 @@ class Router
     private function handlePatch($uri)
     {
         $body = $this->request->getBody();
+        $contentType = $this->request->getHeader('Content-Type') ?? '';
+        
+        // Validate Content-Type header for PATCH
+        if (empty($contentType)) {
+            $this->response
+                ->json([
+                    'error' => 'Bad Request',
+                    'message' => 'Content-Type header is required for PATCH requests',
+                ], 400)
+                ->send();
+            return;
+        }
+        
+        // Validate JSON content type
+        if (strpos($contentType, 'application/json') === false) {
+            $this->response
+                ->json([
+                    'error' => 'Unsupported Media Type',
+                    'message' => 'Content-Type must be application/json for PATCH requests',
+                ], 415)
+                ->send();
+            return;
+        }
         
         if (!$this->dataHandler->exists($uri)) {
             $this->response
@@ -274,9 +363,22 @@ class Router
         $method = $this->request->getMethod();
         $headers = $this->request->getHeaders();
         $uri = $this->request->getUri();
+        $contentType = $this->request->getHeader('Content-Type') ?? '';
         
         // Check for TUS protocol
         if (isset($headers['Tus-Resumable'])) {
+            // Validate TUS headers
+            $validation = HeaderValidator::validateTusHeaders($headers, $method);
+            if (!$validation['valid']) {
+                $this->response
+                    ->json([
+                        'error' => 'Bad Request',
+                        'message' => $validation['error'],
+                    ], 400)
+                    ->send();
+                return;
+            }
+            
             $result = $this->fileHandler->handleTusUpload($method, $headers);
             
             if (isset($result['headers'])) {
@@ -296,13 +398,60 @@ class Router
         
         // Regular file upload
         if ($method === 'POST') {
-            $contentType = $this->request->getHeader('Content-Type') ?? '';
+            // Validate Content-Type for POST uploads
+            if (empty($contentType)) {
+                $this->response
+                    ->json([
+                        'error' => 'Bad Request',
+                        'message' => 'Content-Type header is required for file uploads',
+                    ], 400)
+                    ->send();
+                return;
+            }
             
             if (strpos($contentType, 'multipart/form-data') !== false) {
                 $result = $this->fileHandler->handleMultipartUpload();
             } else {
                 $result = $this->fileHandler->handleRawUpload();
             }
+            
+            $this->response
+                ->json($result, $result['success'] ? 201 : 400)
+                ->send();
+        } elseif ($method === 'PUT') {
+            // Validate Content-Type for PUT uploads
+            if (empty($contentType)) {
+                $this->response
+                    ->json([
+                        'error' => 'Bad Request',
+                        'message' => 'Content-Type header is required for file uploads',
+                    ], 400)
+                    ->send();
+                return;
+            }
+            
+            // Validate Content-Length
+            $contentLength = HeaderValidator::getHeader($headers, 'Content-Length');
+            if ($contentLength) {
+                $validation = HeaderValidator::validateContentLength(
+                    $contentLength,
+                    $this->config['server']['max_upload_size']
+                );
+                
+                if (!$validation['valid']) {
+                    $this->response
+                        ->json([
+                            'error' => 'Bad Request',
+                            'message' => $validation['error'],
+                        ], 400)
+                        ->send();
+                    return;
+                }
+            }
+            
+            // Extract filename from URI
+            $filename = basename($uri);
+            $result = $this->fileHandler->handleRawUpload($filename);
             
             $this->response
                 ->json($result, $result['success'] ? 201 : 400)
@@ -332,6 +481,19 @@ class Router
     
     private function handleLogin()
     {
+        $contentType = $this->request->getHeader('Content-Type') ?? '';
+        
+        // Validate Content-Type
+        if (empty($contentType) || strpos($contentType, 'application/json') === false) {
+            $this->response
+                ->json([
+                    'error' => 'Bad Request',
+                    'message' => 'Content-Type must be application/json',
+                ], 400)
+                ->send();
+            return;
+        }
+        
         $body = $this->request->getBody();
         
         if (!isset($body['username']) || !isset($body['password'])) {
@@ -374,6 +536,19 @@ class Router
     
     private function handleOAuthToken()
     {
+        $contentType = $this->request->getHeader('Content-Type') ?? '';
+        
+        // Validate Content-Type
+        if (empty($contentType) || strpos($contentType, 'application/json') === false) {
+            $this->response
+                ->json([
+                    'error' => 'invalid_request',
+                    'error_description' => 'Content-Type must be application/json',
+                ], 400)
+                ->send();
+            return;
+        }
+        
         $body = $this->request->getBody();
         
         $clientId = $body['client_id'] ?? null;

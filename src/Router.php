@@ -28,7 +28,7 @@ class Router
         $this->authHandler = new AuthHandler($config);
         $this->dataHandler = new DataHandler($config);
         $this->fileHandler = new FileUploadHandler($config);
-        $this->request = new Request();
+        $this->request = new Request($config);
         $this->response = new Response();
         $this->rateLimiter = new RateLimiter($config);
         $this->apiKeyManager = new ApiKeyManager($config);

@@ -17,13 +17,26 @@ cd mock-server
 ```
 
 ### 2. Start the Server
+
+**Option A: PHP Built-in Server (Quickest)**
 ```bash
 php -S localhost:8080 router.php
 ```
+Access at: `http://localhost:8080/`
 
-That's it! The server is now running on `http://localhost:8080`
+**Option B: MAMP/Apache Server**
+1. Copy `mock-server` folder to MAMP's `htdocs` directory
+2. Start MAMP
+3. Access at: `http://localhost:8788/mock-server/` (adjust port as needed)
+
+See [MAMP_SETUP.md](MAMP_SETUP.md) for detailed MAMP setup instructions.
+
+That's it! The server is now running!
 
 ## Basic Usage
+
+> **Note**: Examples below use `http://localhost:8080/` (PHP built-in server). 
+> If using MAMP, replace with `http://localhost:8788/mock-server/` (adjust port as needed).
 
 ### Create a Resource
 ```bash
@@ -196,13 +209,19 @@ Example:
 
 ## Troubleshooting
 
-### Server won't start
+### Server won't start (PHP built-in)
 - Check if port 8080 is already in use
 - Try a different port: `php -S localhost:9000 router.php`
 
+### MAMP Issues
+- Ensure Apache is running in MAMP
+- Verify the folder is in the correct location (htdocs)
+- Check that mod_rewrite is enabled
+- See [MAMP_SETUP.md](MAMP_SETUP.md) for detailed troubleshooting
+
 ### PUT/PATCH requests return 405
-- Make sure you're using `router.php`: `php -S localhost:8080 router.php`
-- The router script is required for proper HTTP method handling
+- **PHP built-in server**: Make sure you're using `router.php`: `php -S localhost:8080 router.php`
+- **MAMP/Apache**: Ensure `.htaccess` file exists and mod_rewrite is enabled
 
 ### File uploads fail
 - Check `storage/uploads/` directory exists and is writable

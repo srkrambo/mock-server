@@ -9,14 +9,56 @@ class Request
     private $headers;
     private $body;
     private $queryParams;
+    private $basePath;
     
-    public function __construct()
+    public function __construct($config = null)
     {
         $this->method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-        $this->uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+        $this->basePath = $this->detectBasePath($config);
+        $this->uri = $this->parseUri();
         $this->headers = $this->getHeaders();
         $this->body = $this->getBody();
         $this->queryParams = $_GET;
+    }
+    
+    /**
+     * Detect the base path of the application
+     */
+    private function detectBasePath($config)
+    {
+        // If base_path is explicitly set in config, use it
+        if ($config && isset($config['server']['base_path'])) {
+            if ($config['server']['base_path'] !== null) {
+                return rtrim($config['server']['base_path'], '/');
+            }
+        }
+        
+        // Auto-detect based on SCRIPT_NAME
+        $scriptName = $_SERVER['SCRIPT_NAME'] ?? '/index.php';
+        $basePath = str_replace('/index.php', '', $scriptName);
+        
+        // If running at root or with PHP built-in server, basePath will be empty or '/'
+        return ($basePath === '/' || $basePath === '') ? '' : $basePath;
+    }
+    
+    /**
+     * Parse URI and strip base path
+     */
+    private function parseUri()
+    {
+        $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+        
+        // Strip base path from URI
+        if ($this->basePath !== '' && strpos($uri, $this->basePath) === 0) {
+            $uri = substr($uri, strlen($this->basePath));
+        }
+        
+        // Ensure URI starts with /
+        if (empty($uri) || $uri[0] !== '/') {
+            $uri = '/' . $uri;
+        }
+        
+        return $uri;
     }
     
     public function getMethod()

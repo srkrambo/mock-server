@@ -153,7 +153,7 @@ class RateLimiter
      */
     private function saveLimitData($filename, $data)
     {
-        file_put_contents($filename, json_encode($data));
+        file_put_contents($filename, json_encode($data), LOCK_EX);
     }
     
     /**
@@ -165,10 +165,24 @@ class RateLimiter
         $currentTime = time();
         
         foreach ($files as $file) {
-            $data = json_decode(file_get_contents($file), true);
+            // Use file modification time for efficiency
+            $mtime = @filemtime($file);
+            if ($mtime !== false && $currentTime >= $mtime + 3600) {
+                // Delete files that haven't been modified for more than 1 hour
+                @unlink($file);
+                continue;
+            }
+            
+            // Fallback to checking content if needed
+            $content = @file_get_contents($file);
+            if ($content === false) {
+                continue;
+            }
+            
+            $data = json_decode($content, true);
             if (is_array($data) && isset($data['reset_at']) && $currentTime >= $data['reset_at'] + 3600) {
                 // Delete files that are expired for more than 1 hour
-                unlink($file);
+                @unlink($file);
             }
         }
     }

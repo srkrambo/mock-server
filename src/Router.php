@@ -706,10 +706,18 @@ class Router
      */
     private function getClientIp()
     {
-        if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+        // In production, prefer REMOTE_ADDR to prevent header spoofing
+        if ($this->isProductionMode()) {
+            return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        }
+        
+        // In local mode, allow forwarded headers for development/testing
+        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            // Get first IP from comma-separated list
+            $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+            return trim($ips[0]);
+        } elseif (!empty($_SERVER['HTTP_CLIENT_IP'])) {
             return $_SERVER['HTTP_CLIENT_IP'];
-        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-            return $_SERVER['HTTP_X_FORWARDED_FOR'];
         } else {
             return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
         }
@@ -777,16 +785,39 @@ class Router
      */
     private function handleListApiKeys()
     {
-        // In production, this might require admin authentication
-        // For now, we'll allow listing for management purposes
+        // In production mode, require API key for listing
+        if ($this->isProductionMode()) {
+            $headers = $this->request->getHeaders();
+            $apiKeyResult = $this->checkApiKey($headers);
+            
+            if (!$apiKeyResult['valid']) {
+                $this->response
+                    ->json([
+                        'error' => 'Unauthorized',
+                        'message' => 'API key is required to list API keys',
+                    ], 401)
+                    ->send();
+                return;
+            }
+        }
         
         $keys = $this->apiKeyManager->listKeys();
+        
+        // Mask API keys for security (show only first and last 4 characters)
+        $maskedKeys = array_map(function($key) {
+            $keyStr = $key['key'];
+            $masked = substr($keyStr, 0, 7) . '...' . substr($keyStr, -4);
+            $key['key_masked'] = $masked;
+            unset($key['key']); // Don't expose full key
+            return $key;
+        }, $keys);
         
         $this->response
             ->json([
                 'success' => true,
-                'keys' => $keys,
-                'total' => count($keys),
+                'keys' => $maskedKeys,
+                'total' => count($maskedKeys),
+                'note' => 'Keys are masked for security. Use the full key provided during generation.',
             ])
             ->send();
     }

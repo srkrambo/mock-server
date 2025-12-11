@@ -166,7 +166,7 @@ class ApiKeyManager
      */
     private function saveAllKeys($keys)
     {
-        file_put_contents($this->keysFile, json_encode($keys, JSON_PRETTY_PRINT));
+        file_put_contents($this->keysFile, json_encode($keys, JSON_PRETTY_PRINT), LOCK_EX);
     }
     
     /**

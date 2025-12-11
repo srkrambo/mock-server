@@ -71,7 +71,9 @@ class Request
         
         if (strpos($contentType, 'application/json') !== false) {
             $raw = file_get_contents('php://input');
-            $this->body = json_decode($raw, true);
+            $decoded = json_decode($raw, true);
+            // If JSON decode fails, keep raw content
+            $this->body = ($decoded === null && json_last_error() !== JSON_ERROR_NONE) ? $raw : $decoded;
         } elseif (strpos($contentType, 'application/x-www-form-urlencoded') !== false) {
             $this->body = $_POST;
         } elseif (strpos($contentType, 'multipart/form-data') !== false) {

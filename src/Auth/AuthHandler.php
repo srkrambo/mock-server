@@ -52,7 +52,12 @@ class AuthHandler
             return ['success' => false, 'error' => 'Empty credentials in Authorization header'];
         }
         
-        $credentials = base64_decode($matches[1]);
+        $credentials = base64_decode($matches[1], true);
+        
+        if ($credentials === false) {
+            return ['success' => false, 'error' => 'Invalid base64 encoding in Authorization header'];
+        }
+        
         $parts = explode(':', $credentials, 2);
         
         if (count($parts) !== 2) {

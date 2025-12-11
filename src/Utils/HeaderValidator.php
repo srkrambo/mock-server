@@ -119,6 +119,14 @@ class HeaderValidator
             ];
         }
         
+        // Validate numeric content
+        if (!is_numeric($contentLength)) {
+            return [
+                'valid' => false,
+                'error' => 'Content-Length must be a numeric value',
+            ];
+        }
+        
         $size = (int)$contentLength;
         
         if ($size > $maxSize) {

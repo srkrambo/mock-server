@@ -220,6 +220,9 @@ class Router
         
         // Check if this is a file upload
         if (strpos($contentType, 'multipart/form-data') !== false) {
+            // Clean up old uploaded files (older than 5 hours) before uploading new one
+            $this->fileHandler->cleanupOldUploads(5);
+            
             // Validate upload size
             $contentLength = $this->request->getHeader('Content-Length');
             if ($contentLength && (int)$contentLength > $maxUploadSize) {
@@ -241,6 +244,9 @@ class Router
         
         // Check if this is base64 encoded file
         if (is_array($body) && isset($body['type']) && $body['type'] === 'base64') {
+            // Clean up old uploaded files (older than 5 hours) before uploading new one
+            $this->fileHandler->cleanupOldUploads(5);
+            
             $result = $this->fileHandler->handleBase64Upload($body, $maxUploadSize);
             $this->response
                 ->json($result, $result['success'] ? 201 : 400)
@@ -259,6 +265,9 @@ class Router
                 ->send();
             return;
         }
+        
+        // Clean up old POST entries (older than 5 hours) before storing new one
+        $this->dataHandler->cleanupOldEntries(5);
         
         // Store regular data
         $result = $this->dataHandler->store($uri, $body);
@@ -493,6 +502,9 @@ class Router
         
         // Regular file upload
         if ($method === 'POST') {
+            // Clean up old uploaded files (older than 5 hours) before uploading new one
+            $this->fileHandler->cleanupOldUploads(5);
+            
             // Validate Content-Type for POST uploads
             if (empty($contentType)) {
                 $this->response

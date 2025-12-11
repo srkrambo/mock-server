@@ -434,12 +434,15 @@ class FileUploadHandler
             if (is_file($filepath)) {
                 $modifiedTime = filemtime($filepath);
                 
+                // Skip if filemtime failed or file is not old enough
+                if ($modifiedTime === false || $modifiedTime >= $cutoffTime) {
+                    continue;
+                }
+                
                 // Delete files older than cutoff time (including .meta files)
-                if ($modifiedTime < $cutoffTime) {
-                    if (unlink($filepath)) {
-                        $deletedCount++;
-                        $deletedFiles[] = $file;
-                    }
+                if (unlink($filepath)) {
+                    $deletedCount++;
+                    $deletedFiles[] = $file;
                 }
             }
         }

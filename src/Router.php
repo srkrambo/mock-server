@@ -221,8 +221,7 @@ class Router
         // Check if this is a file upload
         if (strpos($contentType, 'multipart/form-data') !== false) {
             // Clean up old uploaded files before uploading new one
-            $cleanupHours = $this->config['storage']['cleanup_hours'] ?? 5;
-            $this->fileHandler->cleanupOldUploads($cleanupHours);
+            $this->fileHandler->cleanupOldUploads($this->getCleanupHours());
             
             // Validate upload size
             $contentLength = $this->request->getHeader('Content-Length');
@@ -246,8 +245,7 @@ class Router
         // Check if this is base64 encoded file
         if (is_array($body) && isset($body['type']) && $body['type'] === 'base64') {
             // Clean up old uploaded files before uploading new one
-            $cleanupHours = $this->config['storage']['cleanup_hours'] ?? 5;
-            $this->fileHandler->cleanupOldUploads($cleanupHours);
+            $this->fileHandler->cleanupOldUploads($this->getCleanupHours());
             
             $result = $this->fileHandler->handleBase64Upload($body, $maxUploadSize);
             $this->response
@@ -269,8 +267,7 @@ class Router
         }
         
         // Clean up old POST entries before storing new one
-        $cleanupHours = $this->config['storage']['cleanup_hours'] ?? 5;
-        $this->dataHandler->cleanupOldEntries($cleanupHours);
+        $this->dataHandler->cleanupOldEntries($this->getCleanupHours());
         
         // Store regular data
         $result = $this->dataHandler->store($uri, $body);
@@ -506,8 +503,7 @@ class Router
         // Regular file upload
         if ($method === 'POST') {
             // Clean up old uploaded files before uploading new one
-            $cleanupHours = $this->config['storage']['cleanup_hours'] ?? 5;
-            $this->fileHandler->cleanupOldUploads($cleanupHours);
+            $this->fileHandler->cleanupOldUploads($this->getCleanupHours());
             
             // Validate Content-Type for POST uploads
             if (empty($contentType)) {
@@ -948,6 +944,14 @@ class Router
             return $this->config['server']['production_max_upload_size'] ?? (1 * 1024); // 1KB default
         }
         return $this->config['server']['max_upload_size'] ?? (50 * 1024 * 1024); // 50MB default
+    }
+    
+    /**
+     * Get cleanup hours from configuration
+     */
+    private function getCleanupHours()
+    {
+        return $this->config['storage']['cleanup_hours'] ?? 5;
     }
     
     /**

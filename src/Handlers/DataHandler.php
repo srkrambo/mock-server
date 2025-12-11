@@ -181,13 +181,16 @@ class DataHandler
             if (is_file($filepath)) {
                 $modifiedTime = filemtime($filepath);
                 
+                // Skip if filemtime failed or file is not old enough
+                if ($modifiedTime === false || $modifiedTime >= $cutoffTime) {
+                    continue;
+                }
+                
                 // Delete files older than cutoff time
-                if ($modifiedTime < $cutoffTime) {
-                    if (unlink($filepath)) {
-                        $resource = $this->getResourceFromFilename($file);
-                        $deletedCount++;
-                        $deletedFiles[] = $resource;
-                    }
+                if (unlink($filepath)) {
+                    $resource = $this->getResourceFromFilename($file);
+                    $deletedCount++;
+                    $deletedFiles[] = $resource;
                 }
             }
         }

@@ -76,6 +76,19 @@ class Router
             return $this->handleOAuthToken();
         }
         
+        // Web UI routes for Google OAuth
+        if ($uri === '/auth/login' && $method === 'GET') {
+            return $this->serveStaticFile('public/auth.html');
+        }
+        
+        if ($uri === '/auth/success' && $method === 'GET') {
+            return $this->serveStaticFile('public/auth-success.html');
+        }
+        
+        if ($uri === '/auth/generate-key' && $method === 'GET') {
+            return $this->serveStaticFile('public/generate-key.html');
+        }
+        
         // Google OAuth routes
         if ($uri === '/auth/google' && $method === 'GET') {
             return $this->handleGoogleAuthStart();
@@ -893,6 +906,28 @@ class Router
     }
     
     /**
+     * Serve static HTML file
+     */
+    private function serveStaticFile($path)
+    {
+        $fullPath = __DIR__ . '/../' . $path;
+        
+        if (!file_exists($fullPath)) {
+            $this->response
+                ->json([
+                    'error' => 'Not Found',
+                    'message' => 'The requested page does not exist',
+                ], 404)
+                ->send();
+            return;
+        }
+        
+        header('Content-Type: text/html; charset=UTF-8');
+        readfile($fullPath);
+        exit;
+    }
+    
+    /**
      * Handle Google OAuth authentication start
      */
     private function handleGoogleAuthStart()
@@ -924,48 +959,89 @@ class Router
         $error = $_GET['error'] ?? null;
         
         if ($error) {
-            $this->response
-                ->json([
-                    'error' => 'Authentication Failed',
-                    'message' => 'Google authentication was cancelled or failed: ' . $error,
-                ], 400)
-                ->send();
-            return;
+            // Check if client wants JSON response
+            $acceptHeader = $this->request->getHeader('Accept') ?? '';
+            
+            if (strpos($acceptHeader, 'application/json') !== false) {
+                $this->response
+                    ->json([
+                        'error' => 'Authentication Failed',
+                        'message' => 'Google authentication was cancelled or failed: ' . $error,
+                    ], 400)
+                    ->send();
+                return;
+            }
+            
+            // Redirect to login page with error
+            header('Location: /auth/login?error=' . urlencode('Google authentication was cancelled or failed: ' . $error));
+            exit;
         }
         
         if (!$code || !$state) {
-            $this->response
-                ->json([
-                    'error' => 'Bad Request',
-                    'message' => 'Missing code or state parameter',
-                ], 400)
-                ->send();
-            return;
+            // Check if client wants JSON response
+            $acceptHeader = $this->request->getHeader('Accept') ?? '';
+            
+            if (strpos($acceptHeader, 'application/json') !== false) {
+                $this->response
+                    ->json([
+                        'error' => 'Bad Request',
+                        'message' => 'Missing code or state parameter',
+                    ], 400)
+                    ->send();
+                return;
+            }
+            
+            header('Location: /auth/login?error=' . urlencode('Missing authentication parameters'));
+            exit;
         }
         
         $result = $this->authHandler->handleGoogleCallback($code, $state);
         
         if ($result['success']) {
-            $this->response
-                ->json([
-                    'success' => true,
-                    'message' => 'Google authentication successful',
-                    'user' => [
-                        'email' => $result['user']['email'] ?? null,
-                        'name' => $result['user']['name'] ?? null,
-                        'picture' => $result['user']['picture'] ?? null,
-                    ],
+            // Check if client wants JSON response
+            $acceptHeader = $this->request->getHeader('Accept') ?? '';
+            
+            if (strpos($acceptHeader, 'application/json') !== false) {
+                $this->response
+                    ->json([
+                        'success' => true,
+                        'message' => 'Google authentication successful',
+                        'user' => [
+                            'email' => $result['user']['email'] ?? null,
+                            'name' => $result['user']['name'] ?? null,
+                            'picture' => $result['user']['picture'] ?? null,
+                        ],
+                        'token' => $result['token'],
+                        'usage' => 'Use this token in the Authorization header as "Bearer <token>" for API requests',
+                    ])
+                    ->send();
+            } else {
+                // Redirect to success page with token and user info
+                $params = [
                     'token' => $result['token'],
-                    'usage' => 'Use this token in the Authorization header as "Bearer <token>" for API requests',
-                ])
-                ->send();
+                    'email' => $result['user']['email'] ?? '',
+                    'name' => $result['user']['name'] ?? '',
+                    'picture' => $result['user']['picture'] ?? '',
+                ];
+                
+                header('Location: /auth/success?' . http_build_query($params));
+                exit;
+            }
         } else {
-            $this->response
-                ->json([
-                    'error' => 'Authentication Failed',
-                    'message' => $result['error'],
-                ], 401)
-                ->send();
+            // Check if client wants JSON response
+            $acceptHeader = $this->request->getHeader('Accept') ?? '';
+            
+            if (strpos($acceptHeader, 'application/json') !== false) {
+                $this->response
+                    ->json([
+                        'error' => 'Authentication Failed',
+                        'message' => $result['error'],
+                    ], 401)
+                    ->send();
+            } else {
+                header('Location: /auth/login?error=' . urlencode($result['error']));
+                exit;
+            }
         }
     }
     

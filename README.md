@@ -239,6 +239,17 @@ curl http://localhost:8080/files
 
 **Note:** API key generation requires Google OAuth authentication. You must login with Google before generating API keys.
 
+#### Web Interface (Recommended)
+
+The easiest way to generate API keys is through the web interface:
+
+1. **Visit the login page**: Open `http://localhost:8080/auth/login` in your browser
+2. **Sign in with Google**: Click the "Sign in with Google" button and complete authentication
+3. **Copy your token**: After authentication, you'll see your JWT token - copy it for later use
+4. **Generate API key**: Click "Generate API Key" button to create a new API key with a friendly form
+
+#### Command Line Interface
+
 ```bash
 # Step 1: Login with Google (opens browser for OAuth flow)
 # Visit: http://localhost:8080/auth/google
@@ -281,6 +292,9 @@ curl http://localhost:8080/users/1 \
 |--------|----------|-------------|
 | POST | `/login` | Dummy login endpoint, returns JWT token |
 | POST | `/oauth/token` | OAuth 2.0 token endpoint |
+| GET | `/auth/login` | **Web UI:** Google sign-in page |
+| GET | `/auth/success` | **Web UI:** Success page with JWT token |
+| GET | `/auth/generate-key` | **Web UI:** Generate API keys form |
 | GET | `/auth/google` | Start Google OAuth authentication flow |
 | GET | `/auth/google/callback` | Google OAuth callback endpoint |
 | POST | `/auth/google/logout` | Logout from Google authentication |

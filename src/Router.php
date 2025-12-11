@@ -409,6 +409,18 @@ class Router
                 return;
             }
             
+            // Check for base64 encoded upload (JSON with type: base64)
+            if (strpos($contentType, 'application/json') !== false) {
+                $body = $this->request->getBody();
+                if (is_array($body) && isset($body['type']) && $body['type'] === 'base64') {
+                    $result = $this->fileHandler->handleBase64Upload($body);
+                    $this->response
+                        ->json($result, $result['success'] ? 201 : 400)
+                        ->send();
+                    return;
+                }
+            }
+            
             if (strpos($contentType, 'multipart/form-data') !== false) {
                 $result = $this->fileHandler->handleMultipartUpload();
             } else {

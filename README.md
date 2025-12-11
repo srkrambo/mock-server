@@ -50,8 +50,10 @@ cd mock-server
 
 3. Start the built-in PHP server:
 ```bash
-php -S localhost:8080
+php -S localhost:8080 router.php
 ```
+
+Note: The `router.php` file is required to properly route all HTTP methods (GET, POST, PUT, PATCH, DELETE) to the mock server.
 
 ## Configuration
 

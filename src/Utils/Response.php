@@ -82,7 +82,10 @@ class Response
         
         $origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
         
-        if (in_array('*', $config['cors']['origins']) || in_array($origin, $config['cors']['origins'])) {
+        // If '*' is in allowed origins, set header to '*'
+        if (in_array('*', $config['cors']['origins'])) {
+            $this->setHeader('Access-Control-Allow-Origin', '*');
+        } elseif (in_array($origin, $config['cors']['origins'])) {
             $this->setHeader('Access-Control-Allow-Origin', $origin);
         }
         

@@ -327,6 +327,10 @@ class FileUploadHandler
         $files = [];
         $dir = opendir($this->uploadDir);
         
+        if ($dir === false) {
+            return $files; // Return empty array if directory cannot be opened
+        }
+        
         while (($file = readdir($dir)) !== false) {
             if ($file === '.' || $file === '..' || substr($file, -5) === '.meta') {
                 continue;

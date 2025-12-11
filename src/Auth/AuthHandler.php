@@ -53,7 +53,13 @@ class AuthHandler
         }
         
         $credentials = base64_decode($matches[1]);
-        list($username, $password) = explode(':', $credentials, 2);
+        $parts = explode(':', $credentials, 2);
+        
+        if (count($parts) !== 2) {
+            return ['success' => false, 'error' => 'Invalid credentials format. Expected username:password'];
+        }
+        
+        list($username, $password) = $parts;
         
         $validUsers = $this->config['auth']['basic']['users'];
         if (isset($validUsers[$username]) && $validUsers[$username] === $password) {

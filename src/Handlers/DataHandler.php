@@ -120,6 +120,10 @@ class DataHandler
         $resources = [];
         $dir = opendir($this->dataDir);
         
+        if ($dir === false) {
+            return $resources; // Return empty array if directory cannot be opened
+        }
+        
         while (($file = readdir($dir)) !== false) {
             if ($file === '.' || $file === '..') {
                 continue;

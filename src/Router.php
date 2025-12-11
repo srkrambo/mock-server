@@ -68,6 +68,11 @@ class Router
         }
         
         // Special routes that don't require authentication
+        // Root path - show API information
+        if ($uri === '/' && $method === 'GET') {
+            return $this->handleRoot();
+        }
+        
         if ($uri === '/login' && $method === 'POST') {
             return $this->handleLogin();
         }
@@ -593,6 +598,45 @@ class Router
             ->send();
     }
     
+    private function handleRoot()
+    {
+        $this->response
+            ->json([
+                'message' => 'Welcome to PHP Mock Server',
+                'version' => '1.0.0',
+                'documentation' => 'https://github.com/srkrambo/mock-server',
+                'endpoints' => [
+                    'auth' => [
+                        'POST /login' => 'Authenticate and get JWT token',
+                        'POST /oauth/token' => 'OAuth 2.0 token endpoint',
+                        'GET /auth/login' => 'Web UI for Google authentication',
+                        'GET /auth/google' => 'Start Google OAuth flow',
+                        'GET /auth/google/callback' => 'Google OAuth callback',
+                        'POST /auth/google/logout' => 'Logout from Google',
+                    ],
+                    'api_keys' => [
+                        'POST /api/generate-key' => 'Generate new API key (requires Google auth)',
+                        'GET /api/keys' => 'List API keys',
+                    ],
+                    'data' => [
+                        'POST /{resource}' => 'Create a resource',
+                        'GET /{resource}' => 'Retrieve a resource',
+                        'PUT /{resource}' => 'Update or create a resource',
+                        'PATCH /{resource}' => 'Partially update a resource',
+                        'DELETE /{resource}' => 'Delete a resource',
+                        'GET /resources' => 'List all resources',
+                    ],
+                    'files' => [
+                        'POST /upload' => 'Upload files (multipart, raw, base64, or TUS)',
+                        'PUT /upload/{filename}' => 'Upload file with specific name',
+                        'GET /files' => 'List uploaded files',
+                    ],
+                ],
+                'status' => 'operational',
+            ])
+            ->send();
+    }
+    
     private function handleLogin()
     {
         $contentType = $this->request->getHeader('Content-Type') ?? '';
@@ -948,7 +992,14 @@ class Router
             $this->response
                 ->json([
                     'error' => 'Configuration Error',
-                    'message' => 'Google OAuth is not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.',
+                    'message' => 'Google OAuth is not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your .env file. See .env.example for reference.',
+                    'setup_instructions' => [
+                        '1. Copy .env.example to .env',
+                        '2. Create Google OAuth credentials at https://console.cloud.google.com/',
+                        '3. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env file',
+                        '4. Set GOOGLE_REDIRECT_URI (default: http://localhost:8080/auth/google/callback)',
+                    ],
+                    'documentation' => 'See README.md for detailed Google OAuth setup instructions',
                 ], 500)
                 ->send();
             return;

@@ -98,6 +98,37 @@ Note: By default, authentication is **disabled**. Enable it in `config.php`:
 ]
 ```
 
+## Production Mode & API Keys
+
+### Generating API Keys (Requires Google OAuth)
+
+**Note:** API key generation requires Google authentication. Follow these steps:
+
+1. **Configure Google OAuth** (see [PRODUCTION.md](PRODUCTION.md) for detailed setup)
+   ```bash
+   export GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+   export GOOGLE_CLIENT_SECRET="your-client-secret"
+   ```
+
+2. **Authenticate with Google**
+   - Visit: `http://localhost:8080/auth/google`
+   - Complete Google authentication
+   - Save the returned JWT token
+
+3. **Generate API Key**
+   ```bash
+   curl -X POST http://localhost:8080/api/generate-key \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer <your-jwt-token>" \
+     -d '{"metadata": {"description": "My API key"}}'
+   ```
+
+4. **Use API Key**
+   ```bash
+   curl http://localhost:8080/users/1 \
+     -H "X-API-Key: mk_your_api_key_here"
+   ```
+
 ## Running Example Tests
 
 The repository includes test scripts in the `examples/` directory:
@@ -117,12 +148,26 @@ The repository includes test scripts in the `examples/` directory:
 ./examples/test-auth.sh
 ```
 
+### Test Google OAuth Authentication
+```bash
+./examples/test-google-auth.sh
+```
+
+### Test Production Mode
+```bash
+./examples/test-production.sh
+```
+
 ## Common Endpoints
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/login` | POST | Get JWT token |
 | `/oauth/token` | POST | Get OAuth access token |
+| `/auth/google` | GET | Start Google OAuth flow |
+| `/auth/google/callback` | GET | Google OAuth callback |
+| `/api/generate-key` | POST | Generate API key (requires Google auth) |
+| `/api/keys` | GET | List API keys |
 | `/upload` | POST | Upload files |
 | `/upload/{filename}` | PUT | Raw binary upload |
 | `/files` | GET | List uploaded files |

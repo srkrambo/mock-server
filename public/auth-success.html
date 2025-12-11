@@ -310,10 +310,17 @@
             // Update curl command with base path
             const curlCommand = document.getElementById('curl-command');
             if (curlCommand) {
-                const port = window.location.port || '80';
+                const port = window.location.port;
                 const protocol = window.location.protocol;
                 const hostname = window.location.hostname;
-                const baseUrl = `${protocol}//${hostname}${port !== '80' && port !== '443' ? ':' + port : ''}${basePath}`;
+                
+                // Only include port if it's non-standard for the protocol
+                const isDefaultPort = (protocol === 'http:' && port === '80') || 
+                                     (protocol === 'https:' && port === '443') || 
+                                     port === '';
+                const portStr = isDefaultPort ? '' : ':' + port;
+                
+                const baseUrl = `${protocol}//${hostname}${portStr}${basePath}`;
                 curlCommand.textContent = `curl -X POST ${baseUrl}/api/generate-key \\`;
             }
         }

@@ -22,6 +22,10 @@ return [
     // Server settings
     'server' => [
         'base_url' => 'http://localhost:8080',
+        // Base path for the application when running in a subdirectory (e.g., '/mock-server' for MAMP)
+        // Set to empty string '' when running at domain root or with PHP built-in server
+        // Auto-detected if not set, based on SCRIPT_NAME
+        'base_path' => getenv('MOCK_SERVER_BASE_PATH') !== false ? getenv('MOCK_SERVER_BASE_PATH') : null,
         'max_upload_size' => 50 * 1024 * 1024, // 50MB for local development
         'production_max_upload_size' => 1 * 1024, // 1KB for production (configurable)
         'allowed_file_types' => ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'txt', 'doc', 'docx', 'zip'],

@@ -48,12 +48,28 @@ cd mock-server
 
 2. Make sure PHP is installed (PHP 7.4+ recommended)
 
-3. Start the built-in PHP server:
+3. Choose your server setup:
+
+### Option A: PHP Built-in Server (Quick Start)
 ```bash
 php -S localhost:8080 router.php
 ```
+Access at: `http://localhost:8080/`
 
-Note: The `router.php` file is required to properly route all HTTP methods (GET, POST, PUT, PATCH, DELETE) to the mock server.
+Note: The `router.php` file is required to properly route all HTTP methods (GET, POST, PUT, PATCH, DELETE) when using PHP's built-in server.
+
+### Option B: MAMP/Apache Server (Recommended for Development)
+1. Copy the `mock-server` folder to your MAMP's `htdocs` directory
+2. Start MAMP with Apache
+3. Access at: `http://localhost:8788/mock-server/` (adjust port as needed)
+
+No additional configuration needed! The application automatically detects that it's running in a subdirectory. See [MAMP_SETUP.md](MAMP_SETUP.md) for detailed instructions.
+
+### Option C: Other Apache/Nginx Servers
+- Ensure mod_rewrite is enabled (Apache) or proper rewrite rules (Nginx)
+- Point your document root to the mock-server directory
+- The `.htaccess` file handles routing automatically for Apache
+- See [MAMP_SETUP.md](MAMP_SETUP.md) for Apache configuration details
 
 ## Configuration
 

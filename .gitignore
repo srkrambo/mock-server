@@ -1,0 +1,20 @@
+# Storage directories
+/storage/data/*
+/storage/uploads/*
+/storage/sessions/*
+
+# Keep directory structure
+!.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

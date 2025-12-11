@@ -54,7 +54,9 @@ class Request
         }
         
         // Ensure URI starts with /
-        if (empty($uri) || $uri[0] !== '/') {
+        if (empty($uri)) {
+            $uri = '/';
+        } elseif ($uri[0] !== '/') {
             $uri = '/' . $uri;
         }
         

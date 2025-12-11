@@ -237,8 +237,19 @@ curl http://localhost:8080/files
 
 ### 6. Production API Key Management
 
+**Note:** API key generation requires Google OAuth authentication. You must login with Google before generating API keys.
+
 ```bash
-# Generate a new API key
+# Step 1: Login with Google (opens browser for OAuth flow)
+# Visit: http://localhost:8080/auth/google
+
+# Step 2: After successful authentication, use the returned JWT token to generate an API key
+curl -X POST http://localhost:8080/api/generate-key \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token-from-google-login>" \
+  -d '{"metadata": {"description": "My API key"}}'
+
+# Alternative: If using the same session/browser, you can generate without the token
 curl -X POST http://localhost:8080/api/generate-key \
   -H "Content-Type: application/json" \
   -d '{"metadata": {"description": "My API key"}}'
@@ -251,13 +262,29 @@ curl http://localhost:8080/users/1 \
   -H "X-API-Key: mk_your_api_key_here"
 ```
 
+#### Setting up Google OAuth
+
+1. Create a Google Cloud Console project at https://console.cloud.google.com/
+2. Enable Google+ API
+3. Create OAuth 2.0 credentials
+4. Configure environment variables:
+   ```bash
+   export GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+   export GOOGLE_CLIENT_SECRET="your-client-secret"
+   export GOOGLE_REDIRECT_URI="http://localhost:8080/auth/google/callback"
+   ```
+5. Or copy `.env.example` to `.env` and fill in your credentials
+
 ## API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/login` | Dummy login endpoint, returns JWT token |
 | POST | `/oauth/token` | OAuth 2.0 token endpoint |
-| POST | `/api/generate-key` | Generate a new API key (for production) |
+| GET | `/auth/google` | Start Google OAuth authentication flow |
+| GET | `/auth/google/callback` | Google OAuth callback endpoint |
+| POST | `/auth/google/logout` | Logout from Google authentication |
+| POST | `/api/generate-key` | Generate a new API key (requires Google login) |
 | GET | `/api/keys` | List all API keys |
 | POST | `/upload` | Upload files (multipart or raw) |
 | POST/PATCH/HEAD | `/upload/{id}` | TUS resumable upload operations |

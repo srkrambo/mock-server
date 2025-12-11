@@ -97,6 +97,53 @@ Edit `config.php`:
 'auth' => [
     'enabled' => true,
     'production_enforce_api_key' => true, // Enforce in production
+    'production_api_keys' => [
+        'storage_enabled' => true,
+        'require_authentication' => true, // Require Google OAuth
+        'auth_method' => 'google',
+    ],
+],
+```
+
+### Configuring Google OAuth
+
+API key generation requires Google OAuth authentication. Set up your credentials:
+
+1. **Create Google Cloud Console Project**
+   - Go to https://console.cloud.google.com/
+   - Create a new project or select an existing one
+
+2. **Enable Google+ API**
+   - In the project, go to "APIs & Services" > "Library"
+   - Search for "Google+ API" and enable it
+
+3. **Create OAuth 2.0 Credentials**
+   - Go to "APIs & Services" > "Credentials"
+   - Click "Create Credentials" > "OAuth 2.0 Client ID"
+   - Choose "Web application"
+   - Add authorized redirect URI: `http://localhost:8080/auth/google/callback`
+   - For production, add your production URL's callback endpoint
+
+4. **Configure Environment Variables**
+   ```bash
+   export GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+   export GOOGLE_CLIENT_SECRET="your-client-secret"
+   export GOOGLE_REDIRECT_URI="http://localhost:8080/auth/google/callback"
+   ```
+
+5. **Or use .env file**
+   - Copy `.env.example` to `.env`
+   - Fill in your Google OAuth credentials
+
+Edit `config.php` (credentials can also be set here):
+
+```php
+'auth' => [
+    'google' => [
+        'client_id' => getenv('GOOGLE_CLIENT_ID') ?: '',
+        'client_secret' => getenv('GOOGLE_CLIENT_SECRET') ?: '',
+        'redirect_uri' => getenv('GOOGLE_REDIRECT_URI') ?: 'http://localhost:8080/auth/google/callback',
+    ],
 ],
 ```
 
@@ -104,11 +151,50 @@ Edit `config.php`:
 
 ### Generating API Keys
 
-Generate a new API key:
+**Important:** API key generation requires Google OAuth authentication. Follow these steps:
+
+#### Step 1: Configure Google OAuth
+
+Set up your Google OAuth credentials (see Configuration section below for details):
+
+```bash
+export GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+export GOOGLE_CLIENT_SECRET="your-client-secret"
+export GOOGLE_REDIRECT_URI="http://localhost:8080/auth/google/callback"
+```
+
+#### Step 2: Authenticate with Google
+
+Visit the authentication endpoint in your browser:
+
+```
+http://localhost:8080/auth/google
+```
+
+This will redirect you to Google for authentication. After successful authentication, you'll receive a response with a JWT token:
+
+```json
+{
+  "success": true,
+  "message": "Google authentication successful",
+  "user": {
+    "email": "user@example.com",
+    "name": "John Doe",
+    "picture": "https://..."
+  },
+  "token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "usage": "Use this token in the Authorization header as \"Bearer <token>\" for API requests"
+}
+```
+
+#### Step 3: Generate API Key
+
+Use the JWT token from Step 2 to generate an API key:
 
 ```bash
 curl -X POST http://localhost:8080/api/generate-key \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGc..." \
   -d '{"metadata": {"description": "Production API key", "owner": "admin"}}'
 ```
 
@@ -119,6 +205,7 @@ Response:
   "message": "API key generated successfully",
   "api_key": "mk_636285e2cb20685fc6aad811c384f7bedd217fb9ed69a68cb133a9041fb66565",
   "created_at": 1765434215,
+  "generated_by": "user@example.com",
   "usage_instructions": "Include this API key in the X-API-Key header for all requests"
 }
 ```

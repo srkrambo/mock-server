@@ -79,7 +79,8 @@ return [
         // Production API Keys - stored in file system for production
         'production_api_keys' => [
             'storage_enabled' => true, // Store API keys in file system
-            'require_authentication' => false, // Don't require auth for API key generation (for now)
+            'require_authentication' => true, // Require Google OAuth authentication for API key generation
+            'auth_method' => 'google', // Use Google OAuth for authentication
         ],
         
         // JWT
@@ -95,6 +96,17 @@ return [
             'client_secret' => 'mock-client-secret',
             'token_endpoint' => '/oauth/token',
             'authorize_endpoint' => '/oauth/authorize',
+        ],
+        
+        // Google OAuth 2.0
+        'google' => [
+            'client_id' => getenv('GOOGLE_CLIENT_ID') ?: '',
+            'client_secret' => getenv('GOOGLE_CLIENT_SECRET') ?: '',
+            'redirect_uri' => getenv('GOOGLE_REDIRECT_URI') ?: 'http://localhost:8080/auth/google/callback',
+            'auth_uri' => 'https://accounts.google.com/o/oauth2/v2/auth',
+            'token_uri' => 'https://oauth2.googleapis.com/token',
+            'user_info_uri' => 'https://www.googleapis.com/oauth2/v2/userinfo',
+            'scopes' => ['openid', 'email', 'profile'],
         ],
         
         // OpenID Connect

@@ -76,7 +76,33 @@ class Router
             return $this->handleOAuthToken();
         }
         
-        // API key generation endpoint (for production)
+        // Web UI routes for Google OAuth
+        if ($uri === '/auth/login' && $method === 'GET') {
+            return $this->serveStaticFile('public/auth.html');
+        }
+        
+        if ($uri === '/auth/success' && $method === 'GET') {
+            return $this->serveStaticFile('public/auth-success.html');
+        }
+        
+        if ($uri === '/auth/generate-key' && $method === 'GET') {
+            return $this->serveStaticFile('public/generate-key.html');
+        }
+        
+        // Google OAuth routes
+        if ($uri === '/auth/google' && $method === 'GET') {
+            return $this->handleGoogleAuthStart();
+        }
+        
+        if ($uri === '/auth/google/callback' && $method === 'GET') {
+            return $this->handleGoogleAuthCallback();
+        }
+        
+        if ($uri === '/auth/google/logout' && $method === 'POST') {
+            return $this->handleGoogleLogout();
+        }
+        
+        // API key generation endpoint - requires Google authentication
         if ($uri === '/api/generate-key' && $method === 'POST') {
             return $this->handleGenerateApiKey();
         }
@@ -747,9 +773,33 @@ class Router
     
     /**
      * Handle API key generation
+     * Requires Google OAuth authentication
      */
     private function handleGenerateApiKey()
     {
+        // Check if Google authentication is required
+        $requireAuth = $this->config['auth']['production_api_keys']['require_authentication'] ?? false;
+        
+        if ($requireAuth) {
+            // Verify Google authentication using a dedicated method
+            $authResult = $this->verifyGoogleAuth();
+            
+            if (!$authResult['success']) {
+                $this->response
+                    ->json([
+                        'error' => 'Unauthorized',
+                        'message' => 'Google authentication is required to generate API keys. Please login with Google first.',
+                        'auth_url' => '/auth/google',
+                    ], 401)
+                    ->send();
+                return;
+            }
+            
+            $authenticatedUser = $authResult['user'];
+        } else {
+            $authenticatedUser = 'anonymous';
+        }
+        
         $contentType = $this->request->getHeader('Content-Type') ?? '';
         
         // Validate Content-Type
@@ -766,6 +816,12 @@ class Router
         $body = $this->request->getBody();
         $metadata = is_array($body) ? ($body['metadata'] ?? []) : [];
         
+        // Add authenticated user to metadata
+        if ($requireAuth) {
+            $metadata['generated_by'] = $authenticatedUser;
+            $metadata['auth_method'] = 'google';
+        }
+        
         // Generate new API key
         $keyData = $this->apiKeyManager->generateKey($metadata);
         
@@ -775,6 +831,7 @@ class Router
                 'message' => 'API key generated successfully',
                 'api_key' => $keyData['key'],
                 'created_at' => $keyData['created_at'],
+                'generated_by' => $authenticatedUser,
                 'usage_instructions' => 'Include this API key in the X-API-Key header for all requests',
             ], 201)
             ->send();
@@ -831,5 +888,182 @@ class Router
             return $this->config['server']['production_max_upload_size'] ?? (1 * 1024); // 1KB default
         }
         return $this->config['server']['max_upload_size'] ?? (50 * 1024 * 1024); // 50MB default
+    }
+    
+    /**
+     * Verify Google authentication for API key generation
+     * Returns authentication result without modifying global auth state
+     */
+    private function verifyGoogleAuth()
+    {
+        $headers = $this->request->getHeaders();
+        
+        // Create a temporary auth handler with Google method
+        $tempAuthHandler = new AuthHandler($this->config);
+        $tempAuthHandler->setAuthMethod('google');
+        
+        return $tempAuthHandler->authenticate($headers);
+    }
+    
+    /**
+     * Check if the client prefers JSON response
+     * @return bool
+     */
+    private function isJsonRequest()
+    {
+        $acceptHeader = $this->request->getHeader('Accept') ?? '';
+        return strpos($acceptHeader, 'application/json') !== false;
+    }
+    
+    /**
+     * Serve static HTML file
+     */
+    private function serveStaticFile($path)
+    {
+        $fullPath = __DIR__ . '/../' . $path;
+        
+        if (!file_exists($fullPath)) {
+            $this->response
+                ->json([
+                    'error' => 'Not Found',
+                    'message' => 'The requested page does not exist',
+                ], 404)
+                ->send();
+            return;
+        }
+        
+        header('Content-Type: text/html; charset=UTF-8');
+        readfile($fullPath);
+        exit;
+    }
+    
+    /**
+     * Handle Google OAuth authentication start
+     */
+    private function handleGoogleAuthStart()
+    {
+        $authUrl = $this->authHandler->getGoogleAuthUrl();
+        
+        if (!$authUrl) {
+            $this->response
+                ->json([
+                    'error' => 'Configuration Error',
+                    'message' => 'Google OAuth is not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.',
+                ], 500)
+                ->send();
+            return;
+        }
+        
+        // Redirect to Google OAuth
+        header('Location: ' . $authUrl);
+        exit;
+    }
+    
+    /**
+     * Handle Google OAuth callback
+     */
+    private function handleGoogleAuthCallback()
+    {
+        $code = $_GET['code'] ?? null;
+        $state = $_GET['state'] ?? null;
+        $error = $_GET['error'] ?? null;
+        
+        if ($error) {
+            if ($this->isJsonRequest()) {
+                $this->response
+                    ->json([
+                        'error' => 'Authentication Failed',
+                        'message' => 'Google authentication was cancelled or failed: ' . $error,
+                    ], 400)
+                    ->send();
+                return;
+            }
+            
+            // Redirect to login page with error
+            header('Location: /auth/login?error=' . urlencode('Google authentication was cancelled or failed: ' . $error));
+            exit;
+        }
+        
+        if (!$code || !$state) {
+            if ($this->isJsonRequest()) {
+                $this->response
+                    ->json([
+                        'error' => 'Bad Request',
+                        'message' => 'Missing code or state parameter',
+                    ], 400)
+                    ->send();
+                return;
+            }
+            
+            header('Location: /auth/login?error=' . urlencode('Missing authentication parameters'));
+            exit;
+        }
+        
+        $result = $this->authHandler->handleGoogleCallback($code, $state);
+        
+        if ($result['success']) {
+            if ($this->isJsonRequest()) {
+                $this->response
+                    ->json([
+                        'success' => true,
+                        'message' => 'Google authentication successful',
+                        'user' => [
+                            'email' => $result['user']['email'] ?? null,
+                            'name' => $result['user']['name'] ?? null,
+                            'picture' => $result['user']['picture'] ?? null,
+                        ],
+                        'token' => $result['token'],
+                        'usage' => 'Use this token in the Authorization header as "Bearer <token>" for API requests',
+                    ])
+                    ->send();
+            } else {
+                // Redirect to success page with token and user info
+                $params = [
+                    'token' => $result['token'],
+                    'email' => $result['user']['email'] ?? '',
+                    'name' => $result['user']['name'] ?? '',
+                    'picture' => $result['user']['picture'] ?? '',
+                ];
+                
+                header('Location: /auth/success?' . http_build_query($params));
+                exit;
+            }
+        } else {
+            if ($this->isJsonRequest()) {
+                $this->response
+                    ->json([
+                        'error' => 'Authentication Failed',
+                        'message' => $result['error'],
+                    ], 401)
+                    ->send();
+            } else {
+                header('Location: /auth/login?error=' . urlencode($result['error']));
+                exit;
+            }
+        }
+    }
+    
+    /**
+     * Handle Google logout
+     */
+    private function handleGoogleLogout()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        
+        // Clear Google authentication from session
+        unset($_SESSION['google_authenticated']);
+        unset($_SESSION['google_email']);
+        unset($_SESSION['google_name']);
+        unset($_SESSION['google_picture']);
+        unset($_SESSION['google_id']);
+        
+        $this->response
+            ->json([
+                'success' => true,
+                'message' => 'Logged out successfully',
+            ])
+            ->send();
     }
 }

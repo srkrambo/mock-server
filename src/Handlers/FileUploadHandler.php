@@ -407,4 +407,51 @@ class FileUploadHandler
         closedir($dir);
         return $files;
     }
+    
+    /**
+     * Clean up uploaded files older than specified hours
+     * @param int $hours Number of hours (default: 5)
+     * @return array ['deleted_count' => int, 'deleted_files' => array]
+     */
+    public function cleanupOldUploads($hours = 5)
+    {
+        $cutoffTime = time() - ($hours * 3600);
+        $deletedCount = 0;
+        $deletedFiles = [];
+        
+        $dir = opendir($this->uploadDir);
+        
+        if ($dir === false) {
+            return ['deleted_count' => 0, 'deleted_files' => []];
+        }
+        
+        while (($file = readdir($dir)) !== false) {
+            if ($file === '.' || $file === '..') {
+                continue;
+            }
+            
+            $filepath = $this->uploadDir . '/' . $file;
+            if (is_file($filepath)) {
+                $modifiedTime = filemtime($filepath);
+                
+                // Skip if filemtime failed or file is not old enough
+                if ($modifiedTime === false || $modifiedTime >= $cutoffTime) {
+                    continue;
+                }
+                
+                // Delete files older than cutoff time (including .meta files)
+                if (unlink($filepath)) {
+                    $deletedCount++;
+                    $deletedFiles[] = $file;
+                }
+            }
+        }
+        
+        closedir($dir);
+        
+        return [
+            'deleted_count' => $deletedCount,
+            'deleted_files' => $deletedFiles,
+        ];
+    }
 }

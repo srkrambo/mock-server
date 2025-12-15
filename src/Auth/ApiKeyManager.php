@@ -36,6 +36,14 @@ class ApiKeyManager
      */
     public function generateKey($metadata = [])
     {
+        // Check if a user identifier is provided in metadata
+        $userId = $metadata['generated_by'] ?? null;
+        
+        // If user is identified, revoke any existing active keys for this user
+        if ($userId) {
+            $this->revokeUserKeys($userId);
+        }
+        
         $key = 'mk_' . bin2hex(random_bytes(32)); // mk_ prefix for "mock key"
         
         $keyData = [
@@ -110,6 +118,35 @@ class ApiKeyManager
         }
         
         return false;
+    }
+    
+    /**
+     * Revoke all active API keys for a specific user
+     * @param string $userId User identifier from metadata
+     * @return int Number of keys revoked
+     */
+    private function revokeUserKeys($userId)
+    {
+        $keys = $this->getAllKeys();
+        $revokedCount = 0;
+        
+        foreach ($keys as $key => $data) {
+            // Check if this key belongs to the user and is active
+            if ($data['active'] && 
+                isset($data['metadata']['generated_by']) && 
+                $data['metadata']['generated_by'] === $userId) {
+                $keys[$key]['active'] = false;
+                $keys[$key]['revoked_at'] = time();
+                $keys[$key]['revoked_reason'] = 'Replaced by new key';
+                $revokedCount++;
+            }
+        }
+        
+        if ($revokedCount > 0) {
+            $this->saveAllKeys($keys);
+        }
+        
+        return $revokedCount;
     }
     
     /**
